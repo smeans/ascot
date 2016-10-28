@@ -1,0 +1,6 @@
+TAB=$'\t'
+echo '// !!! GENERATED FILE - DO NOT MODIFY !!!' > mime_types_data.c
+echo 'const char *mime_types[] = {' >> mime_types_data.c
+cat resources/mime.types | grep -v '^#.*$' | sed -E 's/^([^[:space:]]*)/\"\1\"/' | sed -E "s/\"${TAB}+/\" ,/" | sed -E 's/,(.*)$/, \"\1\",/' >> mime_types_data.c
+echo '};' >> mime_types_data.c
+cc -o ascot main.c
