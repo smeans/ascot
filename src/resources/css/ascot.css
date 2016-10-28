@@ -1,0 +1,29 @@
+html, body {
+  font-family: monospace;
+  padding: 0;
+  margin: 0 .5em;
+}
+
+input, button {
+  font-family: monospace;
+}
+
+header {
+  display: flex;
+  align-items: center;
+}
+
+.console {
+  background: #000;
+  color: #0f0;
+  min-width: 80em;
+  min-height: 35em;
+}
+
+.cursor {
+  animation: blinker .5s ease-in-out infinite;
+}
+
+@keyframes blinker {
+  50% { opacity: 0; }
+}
