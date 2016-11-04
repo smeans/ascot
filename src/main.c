@@ -1,6 +1,7 @@
 #include "asys.h"
 #include <sys/socket.h>
 #include <sys/stat.h>
+
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <stdio.h>
@@ -14,6 +15,7 @@
 
 #define COMPILE
 #include "mime_types.h"
+#include "http_status.h"
 #include "asys.h"
 
 void dumpTextBuffer(const char *pb, int cb) {
@@ -87,16 +89,23 @@ struct _request_url {
 } rurl;
 #pragma pack(pop)
 
-void readHttpHeader() {
-  byte rb[4096];
+typedef void (*lineCallback)(char *line);
+
+void readHttpHeader(lineCallback lcb) {
+  byte rb[8192];
   int cb;
   bool firstBlock = true;
-  bool eoh = false;
+  const char *eoh = NULL;
 
   while (!eoh && (cb = read(connfd, rb, sizeof(rb)-1))) {
 
+#ifdef DUMP_REQ
+    fwrite(rb, cb, 1, stderr);
+#endif
+
     rb[cb] = '\0';
-    eoh = !!strstr((const char *)rb, "\r\n\r\n");
+    eoh = strstr((const char *)rb, "\r\n\r\n");
+    const char *phl = NULL;
 
     if (firstBlock) {
       char *ss = (char *)rb;
@@ -118,22 +127,64 @@ void readHttpHeader() {
       strncpy(rurl.url, ss, sizeof(rurl.url)-1);
       rurl.url[sizeof(rurl.url)-1] = '\0';
 
+      se = strstr(++se, "\r\n");
+      assert(se);
+
+      assert(eoh);
+
+      for (ss = se + 2; ss < eoh; ss = se + 2) {
+        se = strstr(ss, "\r\n");
+        *se = '\0';
+        if (lcb) {
+          lcb(ss);
+        }
+      }
+
       firstBlock = false;
     }
   }
 }
 
-void processConnection() {
-  readHttpHeader();
-  fprintf(stderr, "request method: %d\turl: %s\n", requestMethod, rurl.url);
-
+void writeHeader(status) {
   const char *pmt = getMimeType(strext(rurl.url));
 
-  if (!strcmp("/", rurl.url)) {
+  dprintf(connfd, "HTTP/1.0 %d %s\r\n", status, getStatusReason(status));
+  if (pmt) {
+    dprintf(connfd, "content-type: %s; charset=utf-8\r\n", pmt);
+  }
+
+  dprintf(connfd, "\r\n");
+}
+
+void processWebSocketConnection() {
+
+}
+
+void processLine(char *line) {
+  char *pk = line;
+  char *pc = strchr(line, ':');
+  assert(pc);
+
+  *pc = '\0';
+  char *pv = pc + 1;
+
+  fprintf(stderr, "processLine:'%s'=>'%s'\r\n", pk, pv);
+}
+
+void processConnection() {
+  readHttpHeader(processLine);
+  fprintf(stderr, "request method: %d\turl: %s\n", requestMethod, rurl.url);
+
+  if (!strcmp("/ws", rurl.url)) {
+    processWebSocketConnection();
+  } else if (!strcmp("/", rurl.url)) {
+    writeHeader(200);
     writeFileToSocket(connfd, "resources/index.html");
   } else if (fexists(rurl.url_path)) {
+    writeHeader(200);
     writeFileToSocket(connfd, rurl.url_path);
   } else {
+    writeHeader(404);
     writeFileToSocket(connfd, "resources/404.html");
   }
 
