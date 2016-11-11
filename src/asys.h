@@ -18,12 +18,18 @@ typedef _Bool bool;
 #define true    1
 #define false   0
 
+#define min(a, b) (((a) < (b)) ? (a) : (b))
+#define max(a, b) (((a) > (b)) ? (a) : (b))
+
 #define VALUE_TO_STRING(x) #x
 #define VALUE(x) VALUE_TO_STRING(x)
 #define VAR_NAME_VALUE(var) #var "="  VALUE(var)
 
 const char *strext(const char *fname);
 bool fexists(const char *fname);
+
+int base64Encode(const pbyte in, u32 in_len, pbyte out, u32 out_len);
+
 #endif
 
 #ifdef COMPILE
@@ -44,6 +50,43 @@ const char *strext(const char *fname) {
 bool fexists(const char *fname) {
   struct stat st;
   return stat(fname, &st) == 0;
+}
+
+const char *BASE64_CODES = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+
+int base64Encode(const pbyte in, u32 in_len, pbyte out, u32 out_len) {
+    if (out_len < in_len*4/3) {
+      return -1;
+    }
+    int b;
+    int i;
+    pbyte po = out;
+
+    for (i = 0; i < in_len && po < &out[out_len]; i += 3) {
+        b = (in[i] & 0xfc) >> 2;
+        *po++ = BASE64_CODES[b];
+        b = (in[i] & 0x03) << 4;
+        if (i + 1 < in_len)      {
+            b |= (in[i + 1] & 0xf0) >> 4;
+            *po++ = BASE64_CODES[b];
+            b = (in[i + 1] & 0x0f) << 2;
+            if (i + 2 < in_len)  {
+                b |= (in[i + 2] & 0xc0) >> 6;
+                *po++ = BASE64_CODES[b];
+                b = in[i + 2] & 0x3f;
+                *po++ = BASE64_CODES[b];
+            } else {
+                *po++ = BASE64_CODES[b];
+                *po++ = '=';
+            }
+        } else {
+            *po++ = BASE64_CODES[b];
+            *po++ = '=';
+            *po++ = '=';
+        }
+    }
+
+    return po - out;
 }
 #endif
 #endif

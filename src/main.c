@@ -14,9 +14,12 @@
 #include <time.h>
 
 #define COMPILE
+#include "sha1.h"
 #include "mime_types.h"
 #include "http_status.h"
 #include "asys.h"
+
+#include "websocket.h"
 
 void dumpTextBuffer(const char *pb, int cb) {
   int i;
@@ -87,15 +90,20 @@ struct _request_url {
   char url_path[9]; // !!!HACK!!! exactly 9 characters to match "resources" path prefix
   char url[2048];
 } rurl;
+typedef struct _request_url *prequest_url;
+
 #pragma pack(pop)
 
 typedef void (*lineCallback)(char *line);
+typedef lineCallback (*dispatch)(methods method, prequest_url rurl);
 
-void readHttpHeader(lineCallback lcb) {
+void readHttpHeader(dispatch df) {
   byte rb[8192];
   int cb;
   bool firstBlock = true;
   const char *eoh = NULL;
+
+  lineCallback lcf;
 
   while (!eoh && (cb = read(connfd, rb, sizeof(rb)-1))) {
 
@@ -127,6 +135,10 @@ void readHttpHeader(lineCallback lcb) {
       strncpy(rurl.url, ss, sizeof(rurl.url)-1);
       rurl.url[sizeof(rurl.url)-1] = '\0';
 
+      if (df) {
+        lcf = df(requestMethod, &rurl);
+      }
+
       se = strstr(++se, "\r\n");
       assert(se);
 
@@ -135,8 +147,8 @@ void readHttpHeader(lineCallback lcb) {
       for (ss = se + 2; ss < eoh; ss = se + 2) {
         se = strstr(ss, "\r\n");
         *se = '\0';
-        if (lcb) {
-          lcb(ss);
+        if (lcf) {
+          lcf(ss);
         }
       }
 
@@ -156,11 +168,7 @@ void writeHeader(status) {
   dprintf(connfd, "\r\n");
 }
 
-void processWebSocketConnection() {
-
-}
-
-void processLine(char *line) {
+void http_processLine(char *line) {
   char *pk = line;
   char *pc = strchr(line, ':');
   assert(pc);
@@ -171,13 +179,8 @@ void processLine(char *line) {
   fprintf(stderr, "processLine:'%s'=>'%s'\r\n", pk, pv);
 }
 
-void processConnection() {
-  readHttpHeader(processLine);
-  fprintf(stderr, "request method: %d\turl: %s\n", requestMethod, rurl.url);
-
-  if (!strcmp("/ws", rurl.url)) {
-    processWebSocketConnection();
-  } else if (!strcmp("/", rurl.url)) {
+void http_processConnection(int connfd) {
+  if (!strcmp("/", rurl.url)) {
     writeHeader(200);
     writeFileToSocket(connfd, "resources/index.html");
   } else if (fexists(rurl.url_path)) {
@@ -187,6 +190,36 @@ void processConnection() {
     writeHeader(404);
     writeFileToSocket(connfd, "resources/404.html");
   }
+}
+
+typedef enum _connection_type {
+  http,
+  websocket
+} connection_type;
+
+lineCallback ct_to_lc[] = {http_processLine,  websocket_processLine};
+
+typedef void (*connectionProcessor)(int connfd);
+connectionProcessor ct_to_cp[] = {http_processConnection, websocket_processConnection};
+
+connection_type current_connection_type;
+
+lineCallback connectionDispatch(methods method, prequest_url prurl) {
+  fprintf(stderr, "request method: %d\turl: %s\n", requestMethod, prurl->url);
+
+  current_connection_type = http;
+
+  if (!strcmp("/ws", rurl.url)) {
+    current_connection_type = websocket;
+  }
+
+  return ct_to_lc[current_connection_type];
+}
+
+void processConnection() {
+  readHttpHeader(connectionDispatch);
+
+  ct_to_cp[current_connection_type](connfd);
 
   close(connfd);
   connfd = 0;
@@ -194,6 +227,25 @@ void processConnection() {
 
 int main(int argc, char **argv)
 {
+#ifdef DISABLE
+    // sample code calculating test websocket key
+    const char *test_key =  "dGhlIHNhbXBsZSBub25jZQ==";
+    SHA1Context s1c;
+    SHA1Reset(&s1c);
+    SHA1Input(&s1c, (const uint8_t *)test_key, strlen(test_key));
+    SHA1Input(&s1c, (const uint8_t *)WEBSOCKET_MAGIC, strlen(WEBSOCKET_MAGIC));
+
+    uint8_t digest[SHA1HashSize];
+    SHA1Result(&s1c, digest);
+
+    char ob[SHA1HashSize*4/3+3];
+    int cb = base64Encode(digest, sizeof(digest), (pbyte)ob, sizeof(ob));
+    fprintf(stderr, "returned %d: ob size:%d\n", cb, (int)sizeof(ob));
+    assert(cb <= sizeof(ob) - 1);
+    ob[cb] = '\0';
+    fprintf(stderr, "websocket hash: %s\n", ob);
+#endif
+
     atexit(cleanup);
     signal(SIGINT, sigint_handler);
 
