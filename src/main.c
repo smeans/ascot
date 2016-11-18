@@ -227,25 +227,6 @@ void processConnection() {
 
 int main(int argc, char **argv)
 {
-#ifdef DISABLE
-    // sample code calculating test websocket key
-    const char *test_key =  "dGhlIHNhbXBsZSBub25jZQ==";
-    SHA1Context s1c;
-    SHA1Reset(&s1c);
-    SHA1Input(&s1c, (const uint8_t *)test_key, strlen(test_key));
-    SHA1Input(&s1c, (const uint8_t *)WEBSOCKET_MAGIC, strlen(WEBSOCKET_MAGIC));
-
-    uint8_t digest[SHA1HashSize];
-    SHA1Result(&s1c, digest);
-
-    char ob[SHA1HashSize*4/3+3];
-    int cb = base64Encode(digest, sizeof(digest), (pbyte)ob, sizeof(ob));
-    fprintf(stderr, "returned %d: ob size:%d\n", cb, (int)sizeof(ob));
-    assert(cb <= sizeof(ob) - 1);
-    ob[cb] = '\0';
-    fprintf(stderr, "websocket hash: %s\n", ob);
-#endif
-
     atexit(cleanup);
     signal(SIGINT, sigint_handler);
 
