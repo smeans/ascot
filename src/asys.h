@@ -9,7 +9,7 @@ typedef uint *puint;
 
 typedef unsigned short int u16;
 typedef u16 *pu16;
-typedef unsigned long int u32;
+typedef unsigned int u32;
 typedef u32 *pu32;
 typedef unsigned long long int u64;
 typedef u64 *pu64;
@@ -110,6 +110,35 @@ int stricmp(const char *a, const char *b) {
      cb = tolower(toupper(cb));
    } while (ca == cb && ca != '\0');
    return ca - cb;
+}
+
+void util_dump_hex(FILE *hf, void *dp, uint count) {
+  byte *data = (byte *)dp;
+
+  for (int i = 0; i < count; i++) {
+    if (!(i % 16)) {
+      if (i > 0) {
+        char apc[17];
+
+        for (int j = 0; j < 16; j++) {
+          apc[j] = isprint(data[(i-16)+j]) ? data[(i-16)+j] : '.';
+        }
+        apc[16] = '\0';
+
+        fprintf(hf, "    %s", apc);
+      }
+
+      fprintf(hf, "\n%4.4X:", i);
+    }
+
+    if (!(i % 8)) {
+      fprintf(hf, "  ");
+    }
+
+    fprintf(hf, " %2.2X", data[i]);
+  }
+
+  fprintf(hf, "\n");
 }
 #endif
 #endif
