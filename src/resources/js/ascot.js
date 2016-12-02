@@ -16,6 +16,7 @@ $(function () {
   }
 
   wso.onmessage = function (e) {
+    // $('.cursor').before(e.key);
     console.log(e);
   }
 
@@ -26,7 +27,6 @@ $(function () {
 
 function consoleKeypress(e) {
   if (wso.readyState == wso.OPEN) {
-    $('.cursor').before(e.key);
-    wso.send(e.key.repeat(10));
+    wso.send(e.key);
   }
 }

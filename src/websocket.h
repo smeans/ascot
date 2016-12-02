@@ -125,10 +125,14 @@ void websocket_processConnection(int connfd) {
     switch (pl) {
       case 126: {
         read(connfd, &pl, 2);
+        pl = ntohs((u16)pl);
+        fprintf(stderr, "126-true payload_len: %llu\n", pl);
       } break;
 
       case 127: {
         read(connfd, &pl, 8);
+        pl = ntohll(pl);
+        fprintf(stderr, "127-true payload_len: %llu\n", pl);
       } break;
     }
 
@@ -138,7 +142,7 @@ void websocket_processConnection(int connfd) {
     if (wf.mask) {
       read(connfd, &mask, sizeof(mask));
     }
-    fprintf(stderr, "mask: %x sizeof: %ld\n", mask, sizeof(pl));
+    fprintf(stderr, "mask: %x\n", mask);
 
     int i = 0;
     while (i < pl && (cb = read(connfd, ab, min(sizeof(ab), pl)))) {
