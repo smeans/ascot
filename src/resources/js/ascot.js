@@ -16,8 +16,7 @@ $(function () {
   }
 
   wso.onmessage = function (e) {
-    // $('.cursor').before(e.key);
-    console.log(e);
+    $('.cursor').before(e.data);
   }
 
   wso.onclose = function (e) {

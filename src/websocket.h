@@ -47,6 +47,15 @@ typedef struct _WEBSOCKET_FRAME_HEADER {
 } WEBSOCKET_FRAME_HEADER, *PWEBSOCKET_FRAME_HEADER;
 #pragma pack(pop)
 
+typedef struct _WEBSOCKET_FRAME_HEADER_COMPLETE {
+  WEBSOCKET_FRAME_HEADER wfh;
+  u64 true_payload_length;
+  u32 mask_value;
+} WEBSOCKET_FRAME_HEADER_COMPLETE, *PWEBSOCKET_FRAME_HEADER_COMPLETE;
+
+typedef void (*processHeaderRead)(int connfd, PWEBSOCKET_FRAME_HEADER_COMPLETE pfhc);
+typedef void (*processPayloadChunkRead)(int connfd, u64 cbTotalRead, pbyte pbchunk, u32 cbChunk);
+
 void websocket_processLine(char *line);
 void websocket_processConnection(int connfd);
 
@@ -60,6 +69,33 @@ void websocket_processConnection(int connfd);
 
 char server_handshake[base64len(SHA1HashSize)+1];
 char client_protocol[129];
+
+bool writeFrameHeaderComplete(int connfd, PWEBSOCKET_FRAME_HEADER_COMPLETE pfhc) {
+  WEBSOCKET_FRAME_HEADER wfh;
+
+  memcpy(&wfh, &pfhc->wfh, sizeof(wfh));
+
+  wfh.payload_len = wfh.payload_len <= 125 ? wfh.payload_len :
+    (pfhc->true_payload_length & 0xffff == pfhc->true_payload_length ? 126 : 127);
+
+  write(connfd, &wfh, sizeof(wfh));
+  switch (wfh.payload_len) {
+    case 126: {
+      u16 uo = htons((u16)pfhc->true_payload_length);
+
+      write(connfd, &uo, sizeof(uo));
+    } break;
+
+    case 127: {
+      u64 uol = htonll(pfhc->true_payload_length);
+      write(connfd, &uol, sizeof(uol));
+    } break;
+  }
+
+  if (wfh.mask) {
+    write(connfd, &pfhc->mask_value, sizeof(pfhc->mask_value));
+  }
+}
 
 void websocket_processLine(char *line) {
   char *pk = line;
@@ -108,6 +144,22 @@ void websocket_dump_frame(PWEBSOCKET_FRAME_HEADER pwf) {
   fprintf(stderr, "payload_len: 0x%x\r\n", pwf->payload_len);
 }
 
+void websocket_echo_processHeaderRead(int connfd, PWEBSOCKET_FRAME_HEADER_COMPLETE pfhc) {
+  fprintf(stderr, "processHeaderRead: %llu\n", pfhc->true_payload_length);
+  WEBSOCKET_FRAME_HEADER_COMPLETE wfhc;
+  memcpy(&wfhc, pfhc, sizeof(wfhc));
+  wfhc.wfh.mask = 0;
+  writeFrameHeaderComplete(connfd, &wfhc);
+}
+
+void websocket_echo_processPayloadChunkRead(int connfd, u64 cbTotalRead, pbyte pbchunk, u32 cbChunk) {
+  fprintf(stderr, "processPayloadChunkRead: cbTotalRead: %llu\tcbChunk: %u\n", cbTotalRead, cbChunk);
+  write(connfd, pbchunk, cbChunk);
+}
+
+processHeaderRead phrCallback = websocket_echo_processHeaderRead;
+processPayloadChunkRead ppcrCallback = websocket_echo_processPayloadChunkRead;
+
 void websocket_processConnection(int connfd) {
   websocket_writeHeader(connfd);
 
@@ -144,7 +196,16 @@ void websocket_processConnection(int connfd) {
     }
     fprintf(stderr, "mask: %x\n", mask);
 
-    int i = 0;
+    if (phrCallback) {
+      WEBSOCKET_FRAME_HEADER_COMPLETE wfhc;
+      wfhc.wfh = wf;
+      wfhc.true_payload_length = pl;
+      wfhc.mask_value = mask;
+
+      phrCallback(connfd, &wfhc);
+    }
+
+    u64 i = 0;
     while (i < pl && (cb = read(connfd, ab, min(sizeof(ab), pl)))) {
       int j;
       for (j = 0; j < cb; j++) {
@@ -152,6 +213,10 @@ void websocket_processConnection(int connfd) {
       }
 
       i += cb;
+
+      if (ppcrCallback) {
+        ppcrCallback(connfd, i, ab, cb);
+      }
 
       util_dump_hex(stderr, ab, cb);
     }

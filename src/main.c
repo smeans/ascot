@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <assert.h>
 #include <time.h>
+#include <signal.h>
 
 #define COMPILE
 #include "sha1.h"
@@ -157,7 +158,7 @@ void readHttpHeader(dispatch df) {
   }
 }
 
-void writeHeader(status) {
+void writeHeader(uint status) {
   const char *pmt = getMimeType(strext(rurl.url));
 
   dprintf(connfd, "HTTP/1.0 %d %s\r\n", status, getStatusReason(status));
