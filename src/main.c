@@ -21,6 +21,7 @@
 #include "asys.h"
 
 #include "websocket.h"
+#include "ws_shell.h"
 
 void dumpTextBuffer(const char *pb, int cb) {
   int i;

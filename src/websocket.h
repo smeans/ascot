@@ -56,6 +56,9 @@ typedef struct _WEBSOCKET_FRAME_HEADER_COMPLETE {
 typedef void (*processHeaderRead)(int connfd, PWEBSOCKET_FRAME_HEADER_COMPLETE pfhc);
 typedef void (*processPayloadChunkRead)(int connfd, u64 cbTotalRead, pbyte pbchunk, u32 cbChunk);
 
+extern processHeaderRead phrCallback;
+extern processPayloadChunkRead ppcrCallback;
+
 void websocket_processLine(char *line);
 void websocket_processConnection(int connfd);
 
