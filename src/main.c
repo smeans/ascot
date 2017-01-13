@@ -77,6 +77,8 @@ void cleanup() {
     shutdown(listenfd, SHUT_RDWR);
     listenfd = 0;
   }
+
+  shell_killBash();
 }
 
 void sigint_handler() {
@@ -231,6 +233,10 @@ int main(int argc, char **argv)
 {
     atexit(cleanup);
     signal(SIGINT, sigint_handler);
+
+    wfdCallback = shell_waitForData;
+    phrCallback = shell_processHeaderRead;
+    ppcrCallback = shell_processPayloadChunkRead;
 
     strncpy(rurl.url_path, "resources", sizeof(rurl.url_path));
 

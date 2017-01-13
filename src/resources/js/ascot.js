@@ -16,7 +16,10 @@ $(function () {
   }
 
   wso.onmessage = function (e) {
-    $('.cursor').before(e.data);
+    console.log('->' + e.data);
+    var m = e.data.replace('\n', '<br/>');
+
+    $('.cursor').before(m);
   }
 
   wso.onclose = function (e) {
@@ -26,6 +29,16 @@ $(function () {
 
 function consoleKeypress(e) {
   if (wso.readyState == wso.OPEN) {
-    wso.send(e.key);
+    var s;
+    switch (e.key) {
+      case 'Enter': {
+        s = '\n';
+      } break;
+      default: {
+        s = e.key;
+      } break;
+    }
+    console.log('<-' + s);
+    wso.send(s);
   }
 }
